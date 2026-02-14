@@ -553,7 +553,8 @@
 
             async function fetchGoldPrice() {
               try {
-                const response = await fetch("https://data-asg.goldprice.org/dbXRates/USD");
+                // Using a CORS proxy to bypass the 'Access-Control-Allow-Origin' restriction
+                const response = await fetch("https://corsproxy.io/?https://data-asg.goldprice.org/dbXRates/USD");
                 const data = await response.json();
                 const pricePerOunce = data.items[0].xauPrice; // Price per ounce in USD
                 const pricePerGram = pricePerOunce / 31.1034768; // Convert to price per gram
@@ -574,3 +575,4 @@
     </script>
 </body>
 </html>
+
