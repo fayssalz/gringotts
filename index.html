@@ -1,0 +1,1220 @@
+<<<<<<< HEAD
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gringotts knox</title>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 75vh;
+            font-family: sans-serif;
+        }
+
+        /* The main container for the slider */
+        #slider-container {
+            position: relative;
+            width: 100%;
+            height: 750px;
+            background: #1a1a1a;
+            overflow: hidden;
+            perspective: 400px; /* Crucial for the 3D effect */
+            user-select: none;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #slider-container:active {
+            cursor: grabbing;
+        }
+
+        /* The wrapper that holds the 3D wheel */
+        .wheel-container {
+            position: relative;
+            width: 100%;
+            height: 40px;
+            top:40px;
+            transform-style: preserve-3d;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* The actual rotating element */
+        #wheel {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transform: rotateY(0deg);
+        }
+
+        /* Individual ticks/ridges on the wheel */
+        .ridge {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -30px;
+            width: 60px;
+            background: linear-gradient(to right, #333, #111);
+            border-left: 2px solid #444;
+            border-right: 2px solid #000;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.8);
+            backface-visibility: hidden; /* Performance optimization */
+        }
+
+        /* The fade overlay to hide the back of the wheel */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to right, 
+                rgba(26,26,26,1) 0%, 
+                rgba(26,26,26,0) 20%, 
+                rgba(26,26,26,0) 80%, 
+                rgba(26,26,26,1) 100%
+            );
+            pointer-events: none; /* Let clicks pass through */
+            z-index: 10;
+        }
+
+        #pointer-wrapper {
+            position: absolute;
+            top: 37%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 50px;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        #pointer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            filter: invert(1);
+            opacity: 0.5;
+            z-index: -1;
+        }
+
+        #value-display {
+            position: absolute;
+            top: -360px;
+            font-size: 35px;
+            color: white;
+            font-weight: bold;
+            z-index: 20;
+            text-align: center;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #value-display::before {
+            content: "scrape purity"; /* suffix text */
+            position: relative;
+            display:block;
+            opacity: 0.5;
+            color: #e6e4e4;
+            pointer-events: none; /* avoid blocking input clicks */}
+
+        #value-display::after {
+            content: "K"; /* suffix text */
+            position: relative;
+            right: -5px;
+            color: #e6e4e4;
+            pointer-events: none; /* avoid blocking input clicks */}
+
+        /* Calculator Panel */
+        #calculator-panel {
+            position: absolute;
+            right: 30px;
+            background: rgba(30, 30, 30, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #444;
+            color: white;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .calc-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .calc-group label {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        #weight-input {
+            width: 80px;
+            background:rgba(114, 107, 6, 0.384);
+            border-radius: 5px;
+            border: none;
+            color: rgb(252, 252, 252);
+            padding: 5px;
+            text-align: center;
+            font-size: 24px;
+            outline: none;
+            pointer-events: auto;
+            font-weight: bold;
+            position: relative;
+            right: -104px;
+            bottom: -62px;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            height: 200px;
+            gap: 15px;
+        }
+
+        #karat-slider {
+            appearance: slider-vertical;
+            width: 8px;
+            height: 100%;
+            background: #333;
+            outline: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #karat-display {
+            font-size: 24px;
+            font-weight: bold;
+            width: 15px;
+            text-align: center;
+        }
+
+        #result-display {
+            font-size: 32px;
+            color: #ffd700;
+            font-weight: bold;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            margin-top: 5px;
+            position: relative;
+            left: -84px;
+            top: -27px;
+            padding-right: 30px;
+        }
+
+        #result-display::after {
+            content: "g"; /* suffix text */
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #ffd700;
+            pointer-events: none; /* avoid blocking input clicks */
+        }
+
+        @media (max-width: 768px) {
+
+            #calculator-panel {
+                top: auto;
+                bottom: 15%;
+                right: 50%;
+                transform: translateX(50%);
+                width: 90%;
+                max-width: 400px;
+                flex-direction: row;
+                justify-content: space-around;
+                padding: 10px;
+                height: auto;
+                user-select: auto;
+            }
+
+            .slider-row {
+                height: 100px;
+            }
+
+            .slider-row div {
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                height: 100%;
+                font-size: 10px;
+                line-height: 1;
+            }
+
+            .slider-row div br {
+                display: none;
+            }
+        }
+        #gold-price-display {
+                    position: relative;
+                    bottom: -12px;
+                    left: -94px;
+                    color: #d4af37;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    z-index: 20;
+                    background: rgba(0, 0, 0, 0.6);
+                    padding: 8px 15px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                }
+
+        #status-feed {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            pointer-events: none;
+                }
+                
+    </style>
+</head>
+<body>
+
+    <div id="slider-container">
+        <div class="wheel-container">
+            <div id="value-display">18</div>
+            <div id="wheel">  
+                <!-- Ridges will be injected here by JavaScript -->
+            </div>
+            
+            
+        </div>
+        <div class="overlay"></div>
+        
+        <div id="pointer-wrapper">
+            <img id="pointer" src="https://svgsilh.com/svg/303388.svg" alt="Pointer">
+            <input type="number" id="weight-input" value="" min="0" step="0.1" placeholder="g">
+            <div id="result-display" >0.00</div>        
+            <div id="gold-price-display">Loading Gold Price...</div>                        
+        </div>
+        <div id="status-feed">
+            <div id="spotPriceDisplay" style="color: white; font-size: 14px; margin-top: 5px;"></div>
+            <div id="status" style="font-size: 12px; color: #aaa; margin-top: 5px;"></div>
+        </div>
+        
+        <div id="calculator-panel">
+            <div class="calc-group">
+                <label>exchange with</label><br>
+                <div class="slider-row">
+                    <span id="karat-display">18</span><span style="font-size: 24px;
+                    font-weight: bold">K</span>
+                    <input type="range" id="karat-slider" min="0" max="5" step="1" value="5" orient="vertical">
+                    <div>
+                        <span >999</span><br><br>
+                        <span >995</span><br><br>
+                        <span >916</span><br><br>
+                        <span >875</span><br><br>
+                        <span >750</span><br><br>
+                        <span >585</span>
+                    </div>
+                </div>
+            </div>
+            <div class="calc-group">
+                <label>charges</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="range" id="markup-slider" min="0" max="10" step="0.1" value="0.2" style="width: 100px; accent-color: #ffd700;">
+                    <span id="markup-display" style="font-weight: bold; min-width: 40px;">2%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // --- Configuration ---
+        const RADIUS = 150;      // Size of the wheel
+        const TOTAL_ITEMS = 90;  // Number of ridges
+        const FRICTION = 0.99;   // Inertia
+        const SENSITIVITY = 0.1; // How fast it moves when dragging
+        
+        const MIN_VALUE = 6;
+        const MAX_VALUE = 23.976;
+        const SNAP_VALUES = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 23.976];
+        const DEGREES_PER_UNIT = 75; // Rotation degrees per 1.0 value change
+        
+        // Calculator Divisors (Sorted 18 -> 24)
+        const DIVISORS = [14.04, 18, 21, 21.984, 23.88, 23.976];
+
+        // --- State ---
+        let currentRotation = 900;
+        let velocity = 0;
+        let isDragging = false;
+        let lastX = 0;
+        let animationFrameId = null;
+
+        // --- Initialization ---
+        const wheel = document.getElementById('wheel');
+        const container = document.getElementById('slider-container');
+        const valueDisplay = document.getElementById('value-display');
+        
+        const weightInput = document.getElementById('weight-input');
+        const karatSlider = document.getElementById('karat-slider');
+        const karatDisplay = document.getElementById('karat-display');
+        const resultDisplay = document.getElementById('result-display');
+
+        // Create the ridges dynamically
+        for (let i = 0; i < TOTAL_ITEMS; i++) {
+            const ridge = document.createElement('div');
+            ridge.className = 'ridge';
+            // Calculate the angle for this specific ridge
+            const angle = (360 / TOTAL_ITEMS) * i;
+            // Position it in 3D space
+            ridge.style.transform = `rotateY(${angle}deg) translateZ(${RADIUS}px)`;
+            wheel.appendChild(ridge);
+        }
+
+        // --- Create Top and Bottom Caps ---
+        function createCap(offsetZ) {
+            const cap = document.createElement('div');
+            cap.style.position = 'absolute';
+            cap.style.width = (RADIUS * 2) + 'px';
+            cap.style.height = (RADIUS * 2) + 'px';
+            cap.style.borderRadius = '50%';
+            cap.style.background = 'radial-gradient(circle, #222 30%, #000 100%)';
+            cap.style.top = '50%';
+            cap.style.left = '50%';
+            cap.style.transform = `translate(-50%, -50%) rotateX(90deg) translateZ(${offsetZ}px)`;
+            wheel.appendChild(cap);
+        }
+        createCap(20);  // Top Cap (20px is half of the 40px height)
+        createCap(-20); // Bottom Cap
+
+        function formatNumber(num) {
+            const fixed = num.toFixed(2);
+            return fixed.endsWith('.00') ? fixed.slice(0, -3) : fixed;
+        }
+
+        function updateValue() {
+            let val = MIN_VALUE + (currentRotation / DEGREES_PER_UNIT);
+            // Clamp for display
+            val = Math.max(MIN_VALUE, Math.min(MAX_VALUE, val));
+            valueDisplay.textContent = formatNumber(val);
+            updateCalculator(val);
+        }
+
+        // --- Physics Engine ---
+        function applyPhysics() {
+            if (isDragging) return;
+
+            let needsUpdate = false;
+
+            // 1. Apply Velocity
+            if (Math.abs(velocity) > 0.001) {
+                currentRotation += velocity;
+                velocity *= FRICTION;
+                needsUpdate = true;
+            }
+
+            // 2. Boundary Checks (Bounce back)
+            const maxRot = (MAX_VALUE - MIN_VALUE) * DEGREES_PER_UNIT;
+            if (currentRotation < 0) {
+                currentRotation += (0 - currentRotation) * 0.1; // Spring to 0
+                velocity *= 0.8;
+                if (Math.abs(currentRotation) > 0.01) needsUpdate = true;
+            } else if (currentRotation > maxRot) {
+                currentRotation += (maxRot - currentRotation) * 0.1; // Spring to max
+                velocity *= 0.8;
+                if (Math.abs(currentRotation - maxRot) > 0.01) needsUpdate = true;
+            } else {
+                // 3. Snapping Logic (The "Click")
+                // Only snap if moving slowly
+                if (Math.abs(velocity) < 9.5) {
+                    const currentVal = MIN_VALUE + (currentRotation / DEGREES_PER_UNIT);
+                    // Find nearest snap target
+                    const nearest = SNAP_VALUES.reduce((prev, curr) => 
+                        Math.abs(curr - currentVal) < Math.abs(prev - currentVal) ? curr : prev
+                    );
+                    
+                    // If close (within 0.25 units), pull towards it
+                    if (Math.abs(nearest - currentVal) < 0.02) {
+                        const targetRot = (nearest - MIN_VALUE) * DEGREES_PER_UNIT;
+                        const diff = targetRot - currentRotation;
+                        currentRotation += diff * 0.9; // Magnetic pull
+                        if (Math.abs(diff) > 0.01) needsUpdate = true;
+                    }
+                }
+            }
+
+            if (needsUpdate) {
+                wheel.style.transform = `rotateY(${currentRotation}deg)`;
+                updateValue();
+                animationFrameId = requestAnimationFrame(applyPhysics);
+            } else {
+                velocity = 0;
+            }
+        }
+
+        // --- Event Handlers ---
+        function handleStart(x) {
+            isDragging = true;
+            lastX = x;
+            velocity = 0; // Stop momentum when grabbed
+            cancelAnimationFrame(animationFrameId);
+        }
+
+        function handleMove(x) {
+            if (!isDragging) return;
+            const deltaX = x - lastX;
+            lastX = x;
+            
+            const deltaRotation = deltaX * SENSITIVITY;
+            currentRotation += deltaRotation;
+
+            // Soft resistance at edges
+            const maxRot = (MAX_VALUE - MIN_VALUE) * DEGREES_PER_UNIT;
+            if (currentRotation < -30) currentRotation = -30;
+            if (currentRotation > maxRot + 30) currentRotation = maxRot + 30;
+
+            velocity = deltaRotation; // Store speed for when released
+            
+            wheel.style.transform = `rotateY(${currentRotation}deg)`;
+            updateValue();
+        }
+
+        function handleEnd() {
+            isDragging = false;
+            animationFrameId = requestAnimationFrame(applyPhysics);
+        }
+
+        // --- Event Listeners (Mouse & Touch) ---
+        container.addEventListener('mousedown', (e) => handleStart(e.clientX));
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX));
+        window.addEventListener('mouseup', handleEnd);
+        
+        container.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX), { passive: false });
+        window.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX), { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
+        // Mouse Wheel support
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            velocity += e.deltaY * 0.05;
+            if (!isDragging && Math.abs(velocity) > 0.1) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = requestAnimationFrame(applyPhysics);
+            }
+        }, { passive: false });
+
+        // --- Calculator Logic ---
+        function updateCalculator(wheelVal) {
+            // If wheelVal is not provided, grab it from current state
+            if (wheelVal === undefined) {
+                wheelVal = parseFloat(valueDisplay.textContent);
+            }
+            
+            const weight = parseFloat(weightInput.value) || 0;
+            const divisorIndex = parseInt(karatSlider.value);
+            const divisor = DIVISORS[divisorIndex];
+            
+            karatDisplay.textContent = Math.round(divisor);
+            
+            const result = (weight * wheelVal) / divisor;
+            resultDisplay.textContent = result.toFixed(2);
+            if (typeof updateTotalGoldPrice === 'function') {
+                updateTotalGoldPrice();
+            }
+        }
+
+        weightInput.addEventListener('input', () => updateCalculator());
+        karatSlider.addEventListener('input', () => updateCalculator());
+        
+        // Prevent drag when interacting with calculator
+        document.getElementById('calculator-panel').addEventListener('mousedown', (e) => e.stopPropagation());
+        document.getElementById('calculator-panel').addEventListener('touchstart', (e) => e.stopPropagation());
+        
+        // Prevent drag when interacting with weight input
+        weightInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        weightInput.addEventListener('touchstart', (e) => e.stopPropagation());
+        
+        // Initial calc
+        updateCalculator();
+    </script>
+        <script>
+        let storedPricePerGram = sessionStorage.getItem('goldPricePerGram') ? parseFloat(sessionStorage.getItem('goldPricePerGram')) : 0;
+        const prices = { XAU: 0, XAG: 0 };
+        let currentMetal = 'XAU'; // Gold
+
+        function updateTotalGoldPrice() {
+            const calculatedGrams = parseFloat(document.getElementById('result-display').textContent);
+            const markupSlider = document.getElementById('markup-slider');
+            const markupPercent = markupSlider ? parseFloat(markupSlider.value) : 0;
+            
+            if (document.getElementById('markup-display')) document.getElementById('markup-display').textContent = markupPercent + '%';
+
+            if (storedPricePerGram > 0) {
+                const totalPrice = (storedPricePerGram * calculatedGrams) * (1 + markupPercent / 100);
+                document.getElementById("gold-price-display").textContent = `$${totalPrice.toFixed(2)}`;
+            }
+        }
+
+        function initPrices() {
+            const spotPrice = prices[currentMetal]; // This is price per ounce
+            
+            const spotPriceEl = document.getElementById('spotPriceDisplay');
+            if (spotPrice) {
+                spotPriceEl.textContent = `Spot Price (${currentMetal}): $${spotPrice.toFixed(2)}/oz`;
+                
+                // The existing logic uses price per gram.
+                const pricePerGram = spotPrice / 31.1034768;
+                storedPricePerGram = pricePerGram;
+                sessionStorage.setItem('goldPricePerGram', pricePerGram.toString());
+                
+                // Update the main price display
+                updateTotalGoldPrice();
+
+            } else {
+                spotPriceEl.textContent = `Spot Price (${currentMetal}): Loading...`;
+                return;
+            }
+        }
+
+        function initSocket() {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = 'Connecting to live feed...';
+
+            const socket = io("wss://www.livepriceofgold.com", {
+                path: "/sio/p7012/socket.io/",
+                transports: ["websocket"]
+            });
+
+            socket.on('connect', () => {
+                statusEl.textContent = 'Live Feed Connected';
+                statusEl.style.color = '#27ae60';
+            });
+
+            socket.on('update', (data) => {
+                let jsonString = data;
+                if (Array.isArray(data) && data.length > 0) jsonString = data[0];
+
+                try {
+                    const ratesObj = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+                    if (!ratesObj) return;
+
+                    // Update prices
+                    if (ratesObj.XAGUSD) prices.XAG = parseFloat(ratesObj.XAGUSD);
+                    if (ratesObj.XAUUSD) prices.XAU = parseFloat(ratesObj.XAUUSD);
+
+                    // Refresh UI
+                    initPrices();
+                    
+                    const time = new Date().toLocaleTimeString();
+                    statusEl.textContent = `Live Rates updated at ${time}`;
+                } catch (e) {
+                    console.error("Error processing update:", e);
+                }
+            });
+
+            socket.on('disconnect', () => {
+                statusEl.textContent = 'Disconnected from live feed';
+                statusEl.style.color = '#c0392b';
+            });
+        }
+
+        document.getElementById('markup-slider').addEventListener('input', updateTotalGoldPrice);
+        updateTotalGoldPrice();
+        initSocket(); // Start websocket connection
+            
+    </script>
+</body>
+</html>
+=======
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gringotts knox</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 75vh;
+            font-family: sans-serif;
+        }
+
+        /* The main container for the slider */
+        #slider-container {
+            position: relative;
+            width: 100%;
+            height: 750px;
+            background: #1a1a1a;
+            overflow: hidden;
+            perspective: 400px; /* Crucial for the 3D effect */
+            user-select: none;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #slider-container:active {
+            cursor: grabbing;
+        }
+
+        /* The wrapper that holds the 3D wheel */
+        .wheel-container {
+            position: relative;
+            width: 100%;
+            height: 40px;
+            top:40px;
+            transform-style: preserve-3d;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* The actual rotating element */
+        #wheel {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+            transform: rotateY(0deg);
+        }
+
+        /* Individual ticks/ridges on the wheel */
+        .ridge {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            margin-left: -30px;
+            width: 60px;
+            background: linear-gradient(to right, #333, #111);
+            border-left: 2px solid #444;
+            border-right: 2px solid #000;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.8);
+            backface-visibility: hidden; /* Performance optimization */
+        }
+
+        /* The fade overlay to hide the back of the wheel */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to right, 
+                rgba(26,26,26,1) 0%, 
+                rgba(26,26,26,0) 20%, 
+                rgba(26,26,26,0) 80%, 
+                rgba(26,26,26,1) 100%
+            );
+            pointer-events: none; /* Let clicks pass through */
+            z-index: 10;
+        }
+
+        #pointer-wrapper {
+            position: absolute;
+            top: 37%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 300px;
+            height: 300px;
+            z-index: 15;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 50px;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        #pointer {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            filter: invert(1);
+            opacity: 0.5;
+            z-index: -1;
+        }
+
+        #value-display {
+            position: absolute;
+            top: -360px;
+            font-size: 35px;
+            color: white;
+            font-weight: bold;
+            z-index: 20;
+            text-align: center;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #value-display::before {
+            content: "scrape purity"; /* suffix text */
+            position: relative;
+            display:block;
+            opacity: 0.5;
+            color: #e6e4e4;
+            pointer-events: none; /* avoid blocking input clicks */}
+
+        #value-display::after {
+            content: "K"; /* suffix text */
+            position: relative;
+            right: -5px;
+            color: #e6e4e4;
+            pointer-events: none; /* avoid blocking input clicks */}
+
+        /* Calculator Panel */
+        #calculator-panel {
+            position: absolute;
+            right: 30px;
+            background: rgba(30, 30, 30, 0.9);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #444;
+            color: white;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: auto;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .calc-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .calc-group label {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        #weight-input {
+            width: 80px;
+            background:rgba(114, 107, 6, 0.384);
+            border-radius: 5px;
+            border: none;
+            color: rgb(252, 252, 252);
+            padding: 5px;
+            text-align: center;
+            font-size: 24px;
+            outline: none;
+            pointer-events: auto;
+            font-weight: bold;
+            position: relative;
+            right: -104px;
+            bottom: -62px;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            height: 200px;
+            gap: 15px;
+        }
+
+        #karat-slider {
+            appearance: slider-vertical;
+            width: 8px;
+            height: 100%;
+            background: #333;
+            outline: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #karat-display {
+            font-size: 24px;
+            font-weight: bold;
+            width: 15px;
+            text-align: center;
+        }
+
+        #result-display {
+            font-size: 32px;
+            color: #ffd700;
+            font-weight: bold;
+            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            margin-top: 5px;
+            position: relative;
+            left: -84px;
+            top: -27px;
+            padding-right: 30px;
+        }
+
+        #result-display::after {
+            content: "g"; /* suffix text */
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #ffd700;
+            pointer-events: none; /* avoid blocking input clicks */
+        }
+
+        @media (max-width: 768px) {
+
+            #calculator-panel {
+                top: auto;
+                bottom: 15%;
+                right: 50%;
+                transform: translateX(50%);
+                width: 90%;
+                max-width: 400px;
+                flex-direction: row;
+                justify-content: space-around;
+                padding: 10px;
+                height: auto;
+                user-select: auto;
+            }
+
+            .slider-row {
+                height: 100px;
+            }
+
+            .slider-row div {
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                height: 100%;
+                font-size: 10px;
+                line-height: 1;
+            }
+
+            .slider-row div br {
+                display: none;
+            }
+        }
+        #gold-price-display {
+                    position: relative;
+                    bottom: -12px;
+                    left: -94px;
+                    color: #d4af37;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    z-index: 20;
+                    background: rgba(0, 0, 0, 0.6);
+                    padding: 8px 15px;
+                    border-radius: 8px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                }
+                
+    </style>
+</head>
+<body>
+
+    <div id="slider-container">
+        <div class="wheel-container">
+            <div id="value-display">18</div>
+            <div id="wheel">  
+                <!-- Ridges will be injected here by JavaScript -->
+            </div>
+            
+            
+        </div>
+        <div class="overlay"></div>
+        
+        <div id="pointer-wrapper">
+            <img id="pointer" src="https://svgsilh.com/svg/303388.svg" alt="Pointer">
+            <input type="number" id="weight-input" value="" min="0" step="0.1" placeholder="g">
+            <div id="result-display" >0.00</div>        
+            <div id="gold-price-display">Loading Gold Price...</div>
+                        
+        </div>
+        
+        <div id="calculator-panel">
+            <div class="calc-group">
+                <label>exchange with</label><br>
+                <div class="slider-row">
+                    <span id="karat-display">18</span><span style="font-size: 24px;
+                    font-weight: bold">K</span>
+                    <input type="range" id="karat-slider" min="0" max="5" step="1" value="5" orient="vertical">
+                    <div>
+                        <span >999</span><br><br>
+                        <span >995</span><br><br>
+                        <span >916</span><br><br>
+                        <span >875</span><br><br>
+                        <span >750</span><br><br>
+                        <span >585</span>
+                    </div>
+                </div>
+            </div>
+            <div class="calc-group">
+                <label>charges</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="range" id="markup-slider" min="0" max="10" step="0.1" value="2" style="width: 100px; accent-color: #ffd700;">
+                    <span id="markup-display" style="font-weight: bold; min-width: 40px;">2%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // --- Configuration ---
+        const RADIUS = 150;      // Size of the wheel
+        const TOTAL_ITEMS = 90;  // Number of ridges
+        const FRICTION = 0.99;   // Inertia
+        const SENSITIVITY = 0.1; // How fast it moves when dragging
+        
+        const MIN_VALUE = 6;
+        const MAX_VALUE = 24;
+        const SNAP_VALUES = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24];
+        const DEGREES_PER_UNIT = 75; // Rotation degrees per 1.0 value change
+        
+        // Calculator Divisors (Sorted 18 -> 24)
+        const DIVISORS = [14.04, 18, 21, 21.984, 23.88, 23.976];
+
+        // --- State ---
+        let currentRotation = 900;
+        let velocity = 0;
+        let isDragging = false;
+        let lastX = 0;
+        let animationFrameId = null;
+
+        // --- Initialization ---
+        const wheel = document.getElementById('wheel');
+        const container = document.getElementById('slider-container');
+        const valueDisplay = document.getElementById('value-display');
+        
+        const weightInput = document.getElementById('weight-input');
+        const karatSlider = document.getElementById('karat-slider');
+        const karatDisplay = document.getElementById('karat-display');
+        const resultDisplay = document.getElementById('result-display');
+
+        // Create the ridges dynamically
+        for (let i = 0; i < TOTAL_ITEMS; i++) {
+            const ridge = document.createElement('div');
+            ridge.className = 'ridge';
+            // Calculate the angle for this specific ridge
+            const angle = (360 / TOTAL_ITEMS) * i;
+            // Position it in 3D space
+            ridge.style.transform = `rotateY(${angle}deg) translateZ(${RADIUS}px)`;
+            wheel.appendChild(ridge);
+        }
+
+        // --- Create Top and Bottom Caps ---
+        function createCap(offsetZ) {
+            const cap = document.createElement('div');
+            cap.style.position = 'absolute';
+            cap.style.width = (RADIUS * 2) + 'px';
+            cap.style.height = (RADIUS * 2) + 'px';
+            cap.style.borderRadius = '50%';
+            cap.style.background = 'radial-gradient(circle, #222 30%, #000 100%)';
+            cap.style.top = '50%';
+            cap.style.left = '50%';
+            cap.style.transform = `translate(-50%, -50%) rotateX(90deg) translateZ(${offsetZ}px)`;
+            wheel.appendChild(cap);
+        }
+        createCap(20);  // Top Cap (20px is half of the 40px height)
+        createCap(-20); // Bottom Cap
+
+        function formatNumber(num) {
+            const fixed = num.toFixed(2);
+            return fixed.endsWith('.00') ? fixed.slice(0, -3) : fixed;
+        }
+
+        function updateValue() {
+            let val = MIN_VALUE + (currentRotation / DEGREES_PER_UNIT);
+            // Clamp for display
+            val = Math.max(MIN_VALUE, Math.min(MAX_VALUE, val));
+            valueDisplay.textContent = formatNumber(val);
+            updateCalculator(val);
+        }
+
+        // --- Physics Engine ---
+        function applyPhysics() {
+            if (isDragging) return;
+
+            let needsUpdate = false;
+
+            // 1. Apply Velocity
+            if (Math.abs(velocity) > 0.001) {
+                currentRotation += velocity;
+                velocity *= FRICTION;
+                needsUpdate = true;
+            }
+
+            // 2. Boundary Checks (Bounce back)
+            const maxRot = (MAX_VALUE - MIN_VALUE) * DEGREES_PER_UNIT;
+            if (currentRotation < 0) {
+                currentRotation += (0 - currentRotation) * 0.1; // Spring to 0
+                velocity *= 0.8;
+                if (Math.abs(currentRotation) > 0.01) needsUpdate = true;
+            } else if (currentRotation > maxRot) {
+                currentRotation += (maxRot - currentRotation) * 0.1; // Spring to max
+                velocity *= 0.8;
+                if (Math.abs(currentRotation - maxRot) > 0.01) needsUpdate = true;
+            } else {
+                // 3. Snapping Logic (The "Click")
+                // Only snap if moving slowly
+                if (Math.abs(velocity) < 9.5) {
+                    const currentVal = MIN_VALUE + (currentRotation / DEGREES_PER_UNIT);
+                    // Find nearest snap target
+                    const nearest = SNAP_VALUES.reduce((prev, curr) => 
+                        Math.abs(curr - currentVal) < Math.abs(prev - currentVal) ? curr : prev
+                    );
+                    
+                    // If close (within 0.25 units), pull towards it
+                    if (Math.abs(nearest - currentVal) < 0.02) {
+                        const targetRot = (nearest - MIN_VALUE) * DEGREES_PER_UNIT;
+                        const diff = targetRot - currentRotation;
+                        currentRotation += diff * 0.9; // Magnetic pull
+                        if (Math.abs(diff) > 0.01) needsUpdate = true;
+                    }
+                }
+            }
+
+            if (needsUpdate) {
+                wheel.style.transform = `rotateY(${currentRotation}deg)`;
+                updateValue();
+                animationFrameId = requestAnimationFrame(applyPhysics);
+            } else {
+                velocity = 0;
+            }
+        }
+
+        // --- Event Handlers ---
+        function handleStart(x) {
+            isDragging = true;
+            lastX = x;
+            velocity = 0; // Stop momentum when grabbed
+            cancelAnimationFrame(animationFrameId);
+        }
+
+        function handleMove(x) {
+            if (!isDragging) return;
+            const deltaX = x - lastX;
+            lastX = x;
+            
+            const deltaRotation = deltaX * SENSITIVITY;
+            currentRotation += deltaRotation;
+
+            // Soft resistance at edges
+            const maxRot = (MAX_VALUE - MIN_VALUE) * DEGREES_PER_UNIT;
+            if (currentRotation < -30) currentRotation = -30;
+            if (currentRotation > maxRot + 30) currentRotation = maxRot + 30;
+
+            velocity = deltaRotation; // Store speed for when released
+            
+            wheel.style.transform = `rotateY(${currentRotation}deg)`;
+            updateValue();
+        }
+
+        function handleEnd() {
+            isDragging = false;
+            animationFrameId = requestAnimationFrame(applyPhysics);
+        }
+
+        // --- Event Listeners (Mouse & Touch) ---
+        container.addEventListener('mousedown', (e) => handleStart(e.clientX));
+        window.addEventListener('mousemove', (e) => handleMove(e.clientX));
+        window.addEventListener('mouseup', handleEnd);
+        
+        container.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX), { passive: false });
+        window.addEventListener('touchmove', (e) => handleMove(e.touches[0].clientX), { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
+        // Mouse Wheel support
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            velocity += e.deltaY * 0.05;
+            if (!isDragging && Math.abs(velocity) > 0.1) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = requestAnimationFrame(applyPhysics);
+            }
+        }, { passive: false });
+
+        // --- Calculator Logic ---
+        function updateCalculator(wheelVal) {
+            // If wheelVal is not provided, grab it from current state
+            if (wheelVal === undefined) {
+                wheelVal = parseFloat(valueDisplay.textContent);
+            }
+            
+            const weight = parseFloat(weightInput.value) || 0;
+            const divisorIndex = parseInt(karatSlider.value);
+            const divisor = DIVISORS[divisorIndex];
+            
+            karatDisplay.textContent = Math.round(divisor);
+            
+            const result = (weight * wheelVal) / divisor;
+            resultDisplay.textContent = result.toFixed(2);
+            if (typeof updateTotalGoldPrice === 'function') {
+                updateTotalGoldPrice();
+            }
+        }
+
+        weightInput.addEventListener('input', () => updateCalculator());
+        karatSlider.addEventListener('input', () => updateCalculator());
+        
+        // Prevent drag when interacting with calculator
+        document.getElementById('calculator-panel').addEventListener('mousedown', (e) => e.stopPropagation());
+        document.getElementById('calculator-panel').addEventListener('touchstart', (e) => e.stopPropagation());
+        
+        // Prevent drag when interacting with weight input
+        weightInput.addEventListener('mousedown', (e) => e.stopPropagation());
+        weightInput.addEventListener('touchstart', (e) => e.stopPropagation());
+        
+        // Initial calc
+        updateCalculator();
+    </script>
+        <script>
+        
+            let storedPricePerGram = sessionStorage.getItem('goldPricePerGram') ? parseFloat(sessionStorage.getItem('goldPricePerGram')) : 0;
+
+            function updateTotalGoldPrice() {
+                const calculatedGrams = parseFloat(document.getElementById('result-display').textContent);
+                const markupSlider = document.getElementById('markup-slider');
+                const markupPercent = markupSlider ? parseFloat(markupSlider.value) : 0;
+                
+                if (document.getElementById('markup-display')) document.getElementById('markup-display').textContent = markupPercent + '%';
+
+                if (storedPricePerGram > 0) {
+                    const totalPrice = (storedPricePerGram * calculatedGrams) * (1 + markupPercent / 100);
+                    document.getElementById("gold-price-display").textContent = `$${totalPrice.toFixed(2)} $`;
+                }
+            }
+
+            async function fetchGoldPrice() {
+              try {
+                // Using allorigins proxy to bypass CORS and 403 Forbidden errors on GitHub Pages
+                const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://data-asg.goldprice.org/dbXRates/USD')}`);
+                const result = await response.json();
+                const data = JSON.parse(result.contents);
+                  
+                const pricePerOunce = data.items[0].xauPrice; // Price per ounce in USD
+                const pricePerGram = pricePerOunce / 31.1034768; // Convert to price per gram
+                                
+                storedPricePerGram = pricePerGram;
+                sessionStorage.setItem('goldPricePerGram', pricePerGram);
+                updateTotalGoldPrice();
+              } catch (error) {
+                if (storedPricePerGram === 0) document.getElementById("gold-price-display").textContent = "Error fetching price";
+              }
+            } 
+        
+            document.getElementById('markup-slider').addEventListener('input', updateTotalGoldPrice);
+            updateTotalGoldPrice();
+            fetchGoldPrice();
+            setInterval(fetchGoldPrice, 60000); // Refresh every 60 seconds
+            
+    </script>
+</body>
+</html>
+
+
+>>>>>>> da51035 (Fix HTML entity encoding in index.html)
